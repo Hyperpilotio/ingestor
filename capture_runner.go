@@ -6,5 +6,12 @@ import (
 )
 
 func RunCapture(config *viper.Viper) {
-	capturer.GetContainerInstances(config)
+	db, _ := ConnectDB(config)
+	for _, regionName := range capturer.Regions {
+		deployments, _ := capturer.GetClusters(config, regionName)
+		if deployments != nil {
+			db.Insert(*deployments)
+		}
+	}
+	db.Close()
 }
