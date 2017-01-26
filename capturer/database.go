@@ -13,6 +13,7 @@ import (
 // TODO: Synchronize access with mutex
 type DB interface {
 	Insert(deployments Deployments) error
+	Upsert(selector map[string]interface{}, deployments Deployments) error
 }
 
 type MongoDB struct {
@@ -63,6 +64,27 @@ func (db MongoDB) Insert(deployments Deployments) error {
 
 	data = append(data, deployments)
 	err := c.Insert(data...)
+	if err != nil {
+		glog.Errorln(err)
+		return err
+	}
+
+	return nil
+}
+
+func (db MongoDB) Upsert(selector map[string]interface{}, deployments Deployments) error {
+	session, sessionErr := db.connect()
+	if sessionErr != nil {
+		return errors.New("Unable to connect mongo: " + sessionErr.Error())
+	}
+
+	defer session.Close()
+
+	var data interface{}
+	c := session.DB(db.DatabaseName).C(db.TableName)
+
+	data = deployments
+	_, err := c.Upsert(selector, data)
 	if err != nil {
 		glog.Errorln(err)
 		return err
