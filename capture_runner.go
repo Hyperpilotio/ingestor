@@ -5,8 +5,12 @@ import (
 	"github.com/spf13/viper"
 )
 
-func RunCapture(config *viper.Viper) {
-	db, _ := ConnectDB(config)
+func RunCapture(config *viper.Viper) error {
+	db, dbErr := capturer.NewDB(config)
+	if dbErr != nil {
+		return dbErr
+	}
+
 	for _, regionName := range capturer.Regions {
 		// capture AWS ECS Clusters
 		deployments, _ := capturer.GetClusters(config, regionName)
@@ -16,5 +20,6 @@ func RunCapture(config *viper.Viper) {
 
 		// TODO: capture other....
 	}
-	db.Close()
+
+	return nil
 }
