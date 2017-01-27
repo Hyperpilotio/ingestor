@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hyperpilotio/ingestor/capturer"
+
 	"github.com/gin-gonic/gin"
 	"github.com/golang/glog"
 	"github.com/spf13/viper"
@@ -57,7 +59,14 @@ func (server *Server) startIngestor(c *gin.Context) {
 		})
 		return
 	} else {
-		server.capture(interval)
+		if capturers, err := capturer.NewCapturers(server.Config); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": true,
+				"data":  "Unable to create capturers: " + err.Error(),
+			})
+			return
+		}
+		server.capture(interval, capturers)
 		c.JSON(http.StatusAccepted, gin.H{
 			"error": false,
 		})
@@ -68,11 +77,14 @@ func (server *Server) stopIngestor(c *gin.Context) {
 	server.CaptureFlag = false
 }
 
-func (server *Server) capture(interval time.Duration) {
+func (server *Server) capture(interval time.Duration, capturers *capturer.Capturers) {
 	if server.CaptureFlag {
 		timer := time.NewTimer(interval)
 		glog.Infof("Waiting for %s before moving to next capture", interval)
-		RunCapture(server.Config)
+		err := capturers.Run()
+		if err != nil {
+			glog.Warningf("Error when running capturers: %s", err.Error())
+		}
 		<-timer.C
 		server.capture(interval)
 	}
