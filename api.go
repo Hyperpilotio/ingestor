@@ -44,6 +44,17 @@ func (server *Server) StartServer() error {
 		ingestorGroup.POST("/stop", server.stopIngestor)
 	}
 
+	if interval, err := time.ParseDuration(server.Config.GetString("interval")); err != nil {
+		glog.Errorf("Unable to parse interval %s, start ingestor fail", interval, err.Error())
+	} else {
+		go func(interval time.Duration) {
+			server.mutex.Lock()
+			server.CaptureFlag = true
+			server.capture(interval)
+			server.mutex.Unlock()
+		}(interval)
+	}
+
 	return router.Run(":" + server.Config.GetString("port"))
 }
 
