@@ -47,9 +47,9 @@ type Service struct {
 }
 
 type Cluster struct {
-	ClusterName string           `json:"ClusterName" bson:"ClusterName"`
-	NodeInfos   map[int]NodeInfo `json:"NodeInfos" bson:"NodeInfos"`
-	Services    []Service        `json:"Services" bson:"Services"`
+	ClusterName string     `json:"ClusterName" bson:"ClusterName"`
+	NodeInfos   []NodeInfo `json:"NodeInfos" bson:"NodeInfos"`
+	Services    []Service  `json:"Services" bson:"Services"`
 }
 
 type Deployments struct {
@@ -165,8 +165,8 @@ func (capturer AWSECSCapturer) GetClusters() (*Deployments, error) {
 		ecsDescribeInstancesOutput, _ := ecsSvc.DescribeContainerInstances(ecsDescribeInstancesInput)
 
 		// use Ec2InstanceId get instance information
-		nodeInfos := map[int]NodeInfo{}
-		for idx, containerInstance := range ecsDescribeInstancesOutput.ContainerInstances {
+		nodeInfos := []NodeInfo{}
+		for _, containerInstance := range ecsDescribeInstancesOutput.ContainerInstances {
 			ec2InstanceId := *containerInstance.Ec2InstanceId
 			containerInstanceArn := *containerInstance.ContainerInstanceArn
 			ec2DescribeInstancesInput := &ec2.DescribeInstancesInput{
@@ -220,7 +220,7 @@ func (capturer AWSECSCapturer) GetClusters() (*Deployments, error) {
 				clusterTasks = append(clusterTasks, *clusterTask)
 			}
 			nodeInfo.Tasks = clusterTasks
-			nodeInfos[idx+1] = *nodeInfo
+			nodeInfos = append(nodeInfos, *nodeInfo)
 		}
 		deployCluster.NodeInfos = nodeInfos
 
