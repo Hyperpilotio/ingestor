@@ -51,27 +51,29 @@ func (server *Server) startIngestor(c *gin.Context) {
 	server.mutex.Lock()
 	defer server.mutex.Unlock()
 
-	server.CaptureFlag = true
 	if interval, err := time.ParseDuration(server.Config.GetString("interval")); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": true,
 			"data":  fmt.Sprintf("Unable to parse interval %s", interval, err.Error()),
 		})
 		return
-	} else {
-		if capturers, err := capturer.NewCapturers(server.Config); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": true,
-				"data":  "Unable to create capturers: " + err.Error(),
-			})
-			return
-		} else {
-			server.capture(interval, capturers)
-			c.JSON(http.StatusAccepted, gin.H{
-				"error": false,
-			})
-		}
 	}
+
+	capturers, err := capturer.NewCapturers(server.Config)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": true,
+			"data":  "Unable to create capturers: " + err.Error(),
+		})
+		return
+	}
+
+	// TODO: Only start if it hasn't been started!!!
+	server.CaptureFlag = true
+	server.capture(interval, capturers)
+	c.JSON(http.StatusAccepted, gin.H{
+		"error": false,
+	})
 }
 
 func (server *Server) stopIngestor(c *gin.Context) {
