@@ -65,11 +65,12 @@ func (server *Server) startIngestor(c *gin.Context) {
 				"data":  "Unable to create capturers: " + err.Error(),
 			})
 			return
+		} else {
+			server.capture(interval, capturers)
+			c.JSON(http.StatusAccepted, gin.H{
+				"error": false,
+			})
 		}
-		server.capture(interval, capturers)
-		c.JSON(http.StatusAccepted, gin.H{
-			"error": false,
-		})
 	}
 }
 
@@ -86,6 +87,6 @@ func (server *Server) capture(interval time.Duration, capturers *capturer.Captur
 			glog.Warningf("Error when running capturers: %s", err.Error())
 		}
 		<-timer.C
-		server.capture(interval)
+		server.capture(interval, capturers)
 	}
 }
