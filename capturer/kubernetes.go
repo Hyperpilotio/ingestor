@@ -3,7 +3,6 @@ package capturer
 import (
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 
 	"gopkg.in/mgo.v2/bson"
@@ -49,31 +48,26 @@ type KubernetesCluster struct {
 
 type KubernetesDeployments struct {
 	ID       bson.ObjectId       `json:"id" bson:"_id,omitempty"`
-	Region   string              `json:"Region" bson:"Region"`
 	Clusters []KubernetesCluster `json:"Clusters" bson:"Clusters"`
 }
 
-func GetK8SCluster(regionName string) (*KubernetesDeployments, error) {
-
+func GetK8SCluster(kubeconfigPath string) (*KubernetesDeployments, error) {
 	// kubeconfig := flag.String("kubeconfig", filepath.Join(os.Getenv("k8sConfigDir"), "kubeconfig"), "absolute path to the kubeconfig file")
-	kubeconfig := flag.String("kubeconfig", "/tmp/analysis-ui-B6AC186A_kubeconfig/kubeconfig", "absolute path to the kubeconfig file")
-	flag.Parse()
-
-	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
 	if err != nil {
 		return nil, errors.New("Unable to build config: " + err.Error())
 	}
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		return nil, errors.New("Unable to creates a new Clientset: " + err.Error())
+		return nil, errors.New("Unable to create a new Clientset: " + err.Error())
 	}
 	nodes, err := clientset.CoreV1().Nodes().List(v1.ListOptions{})
 	if err != nil {
-		return nil, errors.New("Unable to find any node: " + err.Error())
+		return nil, errors.New("Unable to find nodes: " + err.Error())
 	}
 	pods, err := clientset.CoreV1().Pods("").List(v1.ListOptions{})
 	if err != nil {
-		return nil, errors.New("Unable to find any pod: " + err.Error())
+		return nil, errors.New("Unable to find pods: " + err.Error())
 	}
 
 	k8sCluster := &KubernetesCluster{}
@@ -137,7 +131,7 @@ func GetK8SCluster(regionName string) (*KubernetesDeployments, error) {
 
 	clusters := []KubernetesCluster{}
 	clusters = append(clusters, *k8sCluster)
-	k8sDeployments := &KubernetesDeployments{Region: regionName}
+	k8sDeployments := &KubernetesDeployments{}
 	k8sDeployments.Clusters = clusters
 
 	return k8sDeployments, nil
