@@ -23,6 +23,12 @@ func RunCapture(config *viper.Viper) error {
 		}
 
 		// TODO: capture other....
+		// capture Kubernetes Clusters
+		k8sDeployments, _ := capturer.GetK8SCluster(regionName)
+		if k8sDeployments != nil {
+			// selector := bson.M{"Region": regionName}
+			// db.Upsert(selector, *k8sDeployments)
+		}
 	}
 
 	return nil
