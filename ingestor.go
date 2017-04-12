@@ -16,6 +16,8 @@ func Run(fileConfig string) error {
 	if fileConfig == "" {
 		viper.SetConfigName("config")
 		viper.AddConfigPath("/etc/ingestor")
+		viper.BindEnv("awsId")
+		viper.BindEnv("awsSecret")
 	} else {
 		viper.SetConfigFile(fileConfig)
 	}
@@ -28,6 +30,7 @@ func Run(fileConfig string) error {
 	}
 
 	server := NewServer(viper)
+	go server.AutoIngestor()
 	return server.StartServer()
 }
 

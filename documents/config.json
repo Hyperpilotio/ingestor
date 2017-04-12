@@ -1,0 +1,10 @@
+{
+  "port": 7780,
+  "database": {
+    "type": "mongo",
+    "url": "172.17.0.2",
+    "databaseName": "ingestor",
+    "tableName": "deployments"
+  },
+  "interval": "30s"
+}
