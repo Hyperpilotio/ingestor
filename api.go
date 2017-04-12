@@ -29,6 +29,25 @@ func NewServer(config *viper.Viper) *Server {
 	}
 }
 
+// AutoIngestor activates capture in new goroutine at beginning
+func (server *Server) AutoIngestor() error {
+	interval, intervalErr := time.ParseDuration(server.Config.GetString("interval"))
+	if intervalErr != nil {
+		glog.Warningf("Unable to parse interval %s", interval, intervalErr.Error())
+		return intervalErr
+	}
+
+	capturers, capturerErr := capturer.NewCapturers(server.Config)
+	if capturerErr != nil {
+		glog.Warningf("Unable to create capturers", capturerErr.Error())
+		return capturerErr
+	}
+
+	server.CaptureFlag = true
+	server.capture(interval, capturers)
+	return nil
+}
+
 // StartServer start a web server
 func (server *Server) StartServer() error {
 	//gin.SetMode("release")
@@ -44,37 +63,31 @@ func (server *Server) StartServer() error {
 		ingestorGroup.POST("/stop", server.stopIngestor)
 	}
 
-	if interval, err := time.ParseDuration(server.Config.GetString("interval")); err != nil {
-		glog.Errorf("Unable to parse interval %s, start ingestor fail", interval, err.Error())
-	} else {
-		go func(interval time.Duration) {
-			server.mutex.Lock()
-			server.CaptureFlag = true
-			server.capture(interval)
-			server.mutex.Unlock()
-		}(interval)
-	}
-
 	return router.Run(":" + server.Config.GetString("port"))
 }
 
 func (server *Server) startIngestor(c *gin.Context) {
+	if server.CaptureFlag {
+		return
+	}
+
 	server.mutex.Lock()
 	defer server.mutex.Unlock()
 
-	if interval, err := time.ParseDuration(server.Config.GetString("interval")); err != nil {
+	interval, intervalErr := time.ParseDuration(server.Config.GetString("interval"))
+	if intervalErr != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": true,
-			"data":  fmt.Sprintf("Unable to parse interval %s", interval, err.Error()),
+			"data":  fmt.Sprintf("Unable to parse interval %s", interval, intervalErr.Error()),
 		})
 		return
 	}
 
-	capturers, err := capturer.NewCapturers(server.Config)
-	if err != nil {
+	capturers, capturerErr := capturer.NewCapturers(server.Config)
+	if capturerErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": true,
-			"data":  "Unable to create capturers: " + err.Error(),
+			"data":  "Unable to create capturers: " + capturerErr.Error(),
 		})
 		return
 	}

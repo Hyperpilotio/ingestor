@@ -30,6 +30,7 @@ func Run(fileConfig string) error {
 	}
 
 	server := NewServer(viper)
+	go server.AutoIngestor()
 	return server.StartServer()
 }
 
