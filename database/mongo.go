@@ -1,4 +1,4 @@
-package capturer
+package database
 
 import (
 	"errors"
@@ -6,17 +6,10 @@ import (
 
 	"gopkg.in/mgo.v2"
 
-	"github.com/golang/glog"
 	"github.com/spf13/viper"
 )
 
 // TODO: Synchronize access with mutex
-type DB interface {
-	Insert(deployments Deployments) error
-	Upsert(selector map[string]interface{}, deployments Deployments) error
-	InsertK8s(deployments K8sDeployments) error
-}
-
 type MongoDB struct {
 	Url          string
 	DatabaseName string
@@ -25,7 +18,7 @@ type MongoDB struct {
 }
 
 // Connect to the database
-func NewDB(config *viper.Viper) (DB, error) {
+func NewDB(config *viper.Viper) (*MongoDB, error) {
 	dbType := strings.ToLower(config.GetString("database.type"))
 	dbUrl := config.GetString("database.url")
 	dbName := config.GetString("database.databaseName")
@@ -33,7 +26,7 @@ func NewDB(config *viper.Viper) (DB, error) {
 
 	switch dbType {
 	case "mongo":
-		return MongoDB{
+		return &MongoDB{
 			Url:          dbUrl,
 			DatabaseName: dbName,
 			TableName:    tbName,
@@ -52,7 +45,7 @@ func (db MongoDB) connect() (*mgo.Session, error) {
 	return sess, nil
 }
 
-func (db MongoDB) Insert(deployments Deployments) error {
+func (db MongoDB) Insert(data interface{}) error {
 	session, sessionErr := db.connect()
 	if sessionErr != nil {
 		return errors.New("Unable to connect mongo: " + sessionErr.Error())
@@ -60,20 +53,17 @@ func (db MongoDB) Insert(deployments Deployments) error {
 
 	defer session.Close()
 
-	var data []interface{}
 	c := session.DB(db.DatabaseName).C(db.TableName)
 
-	data = append(data, deployments)
-	err := c.Insert(data...)
+	err := c.Insert(data)
 	if err != nil {
-		glog.Errorln(err)
-		return err
+		return errors.New("Unable to insert data: " + err.Error())
 	}
 
 	return nil
 }
 
-func (db MongoDB) Upsert(selector map[string]interface{}, deployments Deployments) error {
+func (db MongoDB) Upsert(selector map[string]interface{}, data interface{}) error {
 	session, sessionErr := db.connect()
 	if sessionErr != nil {
 		return errors.New("Unable to connect mongo: " + sessionErr.Error())
@@ -81,35 +71,11 @@ func (db MongoDB) Upsert(selector map[string]interface{}, deployments Deployment
 
 	defer session.Close()
 
-	var data interface{}
 	c := session.DB(db.DatabaseName).C(db.TableName)
 
-	data = deployments
 	_, err := c.Upsert(selector, data)
 	if err != nil {
-		glog.Errorln(err)
-		return err
-	}
-
-	return nil
-}
-
-func (db MongoDB) InsertK8s(deployments K8sDeployments) error {
-	session, sessionErr := db.connect()
-	if sessionErr != nil {
-		return errors.New("Unable to connect mongo: " + sessionErr.Error())
-	}
-
-	defer session.Close()
-
-	var data []interface{}
-	c := session.DB(db.DatabaseName).C(db.TableName)
-
-	data = append(data, deployments)
-	err := c.Insert(data...)
-	if err != nil {
-		glog.Errorln(err)
-		return err
+		return errors.New("Unable to upsert data: " + err.Error())
 	}
 
 	return nil

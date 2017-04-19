@@ -1,4 +1,4 @@
-package capturer
+package awsecs
 
 import (
 	"errors"
@@ -8,6 +8,8 @@ import (
 	"github.com/golang/glog"
 	"github.com/spf13/viper"
 	"gopkg.in/mgo.v2/bson"
+
+	"github.com/hyperpilotio/ingestor/database"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -59,18 +61,6 @@ type Deployments struct {
 	Clusters []Cluster     `json:"Clusters" bson:"Clusters"`
 }
 
-var AWSRegions = []string{
-	"us-east-1",
-	"us-east-2",
-	"us-west-1",
-	"us-west-2",
-	"eu-west-1",
-	"eu-central-1",
-	"ap-northeast-1",
-	"ap-southeast-1",
-	"ap-southeast-2",
-}
-
 func createSessionByRegion(viper *viper.Viper, regionName string) (*session.Session, error) {
 	awsId := os.Getenv("awsId")
 	awsSecret := os.Getenv("awsSecret")
@@ -91,11 +81,11 @@ func createSessionByRegion(viper *viper.Viper, regionName string) (*session.Sess
 type AWSECSCapturer struct {
 	Region string
 	Sess   *session.Session
-	DB     DB
+	DB     *database.MongoDB
 }
 
-func NewAWSECSCapturer(config *viper.Viper, region string) (*AWSECSCapturer, error) {
-	db, dbErr := NewDB(config)
+func NewCapturer(config *viper.Viper, region string) (*AWSECSCapturer, error) {
+	db, dbErr := database.NewDB(config)
 	if dbErr != nil {
 		return nil, dbErr
 	}

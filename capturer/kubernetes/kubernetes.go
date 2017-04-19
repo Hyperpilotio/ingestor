@@ -1,4 +1,4 @@
-package capturer
+package kubernetes
 
 import (
 	"errors"
@@ -7,8 +7,13 @@ import (
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api/v1"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
+
+type KubernetesCapturer struct {
+	config *rest.Config
+}
 
 type KubernetesContainer struct {
 	CantainerName  string            `json:"CantainerName" bson:"CantainerName"`
@@ -61,27 +66,36 @@ type K8sDeployments struct {
 	Clusters []KubernetesCluster `json:"Clusters" bson:"Clusters"`
 }
 
-func GetK8SCluster(kubeconfigPath string) (*K8sDeployments, error) {
-	// kubeconfig := flag.String("kubeconfig", "/tmp/analysis-ui-********_kubeconfig/kubeconfig", "absolute path to the kubeconfig file")
+func NewCapturer(kubeconfigPath string) (*KubernetesCapturer, error) {
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
 	if err != nil {
 		return nil, errors.New("Unable to build config: " + err.Error())
 	}
-	clientset, err := kubernetes.NewForConfig(config)
+
+	return &KubernetesCapturer{
+		config: config,
+	}, nil
+}
+
+func (capturer *KubernetesCapturer) Capture() error {
+	clientset, err := kubernetes.NewForConfig(capturer.config)
 	if err != nil {
-		return nil, errors.New("Unable to create a new Clientset: " + err.Error())
+		return errors.New("Unable to create a new Clientset: " + err.Error())
 	}
+
 	deployments, err := clientset.ExtensionsV1beta1().Deployments("").List(v1.ListOptions{})
 	if err != nil {
-		return nil, errors.New("Unable to find deployments: " + err.Error())
+		return errors.New("Unable to find deployments: " + err.Error())
 	}
+
 	nodes, err := clientset.CoreV1().Nodes().List(v1.ListOptions{})
 	if err != nil {
-		return nil, errors.New("Unable to find nodes: " + err.Error())
+		return errors.New("Unable to find nodes: " + err.Error())
 	}
+
 	pods, err := clientset.CoreV1().Pods("").List(v1.ListOptions{})
 	if err != nil {
-		return nil, errors.New("Unable to find pods: " + err.Error())
+		return errors.New("Unable to find pods: " + err.Error())
 	}
 
 	k8sCluster := &KubernetesCluster{}
@@ -97,8 +111,8 @@ func GetK8SCluster(kubeconfigPath string) (*K8sDeployments, error) {
 		clusterDeployment.NodeSelector = deployment.Spec.Template.Spec.NodeSelector
 		clusterDeployments = append(clusterDeployments, *clusterDeployment)
 	}
-	k8sCluster.Deployments = clusterDeployments
 
+	k8sCluster.Deployments = clusterDeployments
 	clusterNodes := []KubernetesNode{}
 	for _, node := range nodes.Items {
 		clusterNode := &KubernetesNode{}
@@ -136,30 +150,16 @@ func GetK8SCluster(kubeconfigPath string) (*K8sDeployments, error) {
 				clusterNode.Pods = deploymentPods
 			}
 		}
+
 		clusterNodes = append(clusterNodes, *clusterNode)
 	}
-	k8sCluster.Nodes = clusterNodes
 
-	// services, err := clientset.CoreV1().Services("").List(v1.ListOptions{})
-	// if err != nil {
-	// 	return nil, errors.New("Unable to find any service: " + err.Error())
-	// }
-	//
-	// clusterServices := []KubernetesService{}
-	// for _, service := range services.Items {
-	// 	clusterService := &KubernetesService{}
-	// 	clusterService.ServiceName = service.Name
-	// 	clusterService.ClusterIP = service.Spec.ClusterIP
-	// 	clusterService.ExternalIPs = service.Spec.ExternalIPs
-	// 	clusterService.Ports = service.Spec.Ports
-	// 	clusterServices = append(clusterServices, *clusterService)
-	// }
-	// k8sCluster.Services = clusterServices
+	k8sCluster.Nodes = clusterNodes
 
 	clusters := []KubernetesCluster{}
 	clusters = append(clusters, *k8sCluster)
 	k8sDeployments := &K8sDeployments{}
 	k8sDeployments.Clusters = clusters
 
-	return k8sDeployments, nil
+	return nil
 }

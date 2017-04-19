@@ -3,6 +3,8 @@ package capturer
 import (
 	"errors"
 
+	"github.com/hyperpilotio/ingestor/capturer/awsecs"
+	"github.com/hyperpilotio/ingestor/capturer/kubernetes"
 	"github.com/spf13/viper"
 )
 
@@ -33,13 +35,23 @@ func NewCapturers(config *viper.Viper) (*Capturers, error) {
 
 	aws := config.Sub("aws")
 	if aws != nil {
-		for _, regionName := range AWSRegions {
-			capturer, err := NewAWSECSCapturer(aws, regionName)
+		for _, region := range aws.GetStringSlice("regions") {
+			capturer, err := awsecs.NewCapturer(aws, region)
 			if err != nil {
 				return nil, errors.New("Unable to create AWS capturer: " + err.Error())
 			}
 			capturers.CapturerList = append(capturers.CapturerList, capturer)
 		}
+	}
+
+	k8sConfig := config.Sub("kubernetes")
+	if k8sConfig != nil {
+		configPath := k8sConfig.GetString("configPath")
+		capturer, err := kubernetes.NewCapturer(configPath)
+		if err != nil {
+			return nil, errors.New("Unable to create Kubernetes capturer: " + err.Error())
+		}
+		capturers.CapturerList = append(capturers.CapturerList, capturer)
 	}
 
 	return capturers, nil
