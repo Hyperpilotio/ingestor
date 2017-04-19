@@ -16,18 +16,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/ecs"
 )
 
-var Regions = []string{
-	"us-east-1",
-	"us-east-2",
-	"us-west-1",
-	"us-west-2",
-	"eu-west-1",
-	"eu-central-1",
-	"ap-northeast-1",
-	"ap-southeast-1",
-	"ap-southeast-2",
-}
-
 type Instance struct {
 	InstanceId   string    `json:"InstanceId" bson:"InstanceId"`
 	InstanceType string    `json:"InstanceType" bson:"InstanceType"`
@@ -70,6 +58,18 @@ type Deployments struct {
 	Clusters []Cluster     `json:"Clusters" bson:"Clusters"`
 }
 
+var AWSRegions = []string{
+	"us-east-1",
+	"us-east-2",
+	"us-west-1",
+	"us-west-2",
+	"eu-west-1",
+	"eu-central-1",
+	"ap-northeast-1",
+	"ap-southeast-1",
+	"ap-southeast-2",
+}
+
 func createSessionByRegion(viper *viper.Viper, regionName string) (*session.Session, error) {
 	awsId := viper.GetString("awsId")
 	awsSecret := viper.GetString("awsSecret")
@@ -87,15 +87,46 @@ func createSessionByRegion(viper *viper.Viper, regionName string) (*session.Sess
 	return sess, nil
 }
 
-func GetClusters(viper *viper.Viper, regionName string) (*Deployments, error) {
-	glog.V(1).Infof("GetClusters for region: %s", regionName)
-	sess, sessionErr := createSessionByRegion(viper, regionName)
-	if sessionErr != nil {
-		return nil, errors.New("Unable to create session: " + sessionErr.Error())
+type AWSECSCapturer struct {
+	Region string
+	Sess   *session.Session
+	DB     DB
+}
+
+func NewAWSECSCapturer(config *viper.Viper, region string) (*AWSECSCapturer, error) {
+	db, dbErr := NewDB(config)
+	if dbErr != nil {
+		return nil, dbErr
 	}
 
-	ecsSvc := ecs.New(sess)
-	ec2Svc := ec2.New(sess)
+	if session, err := createSessionByRegion(config, region); err != nil {
+		return nil, err
+	} else {
+		return &AWSECSCapturer{
+			Region: region,
+			Sess:   session,
+			DB:     db,
+		}, nil
+	}
+}
+
+func (capturer AWSECSCapturer) Capture() error {
+	if deployments, err := capturer.GetClusters(); err != nil {
+		return errors.New("Unable to get clusters info: " + err.Error())
+	} else if deployments != nil {
+		// TODO: need unique condition is required as a basis for update
+		selector := bson.M{"Region": capturer.Region}
+		capturer.DB.Upsert(selector, *deployments)
+	}
+
+	return nil
+}
+
+func (capturer AWSECSCapturer) GetClusters() (*Deployments, error) {
+	glog.V(1).Infof("GetClusters for region: %s", capturer.Region)
+
+	ecsSvc := ecs.New(capturer.Sess)
+	ec2Svc := ec2.New(capturer.Sess)
 
 	// find clusters on region
 	listClustersOutput, listClustersErr := ecsSvc.ListClusters(nil)
@@ -113,7 +144,7 @@ func GetClusters(viper *viper.Viper, regionName string) (*Deployments, error) {
 	}
 	describeClustersOutput, _ := ecsSvc.DescribeClusters(describeClustersInput)
 
-	deployments := &Deployments{Region: regionName}
+	deployments := &Deployments{Region: capturer.Region}
 	deployClusters := []Cluster{}
 	for _, cluster := range describeClustersOutput.Clusters {
 		clusterName := *cluster.ClusterName
