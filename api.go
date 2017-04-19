@@ -17,9 +17,9 @@ var captureFlag bool = true
 
 // Server store the stats / data of every deployment
 type Server struct {
-	Config      *viper.Viper
-	mutex       sync.Mutex
-	CaptureFlag bool
+	Config  *viper.Viper
+	mutex   sync.Mutex
+	runLoop bool
 }
 
 // NewServer return an instance of Server struct.
@@ -29,22 +29,39 @@ func NewServer(config *viper.Viper) *Server {
 	}
 }
 
-// AutoIngestor activates capture in new goroutine at beginning
-func (server *Server) AutoIngestor() error {
-	interval, intervalErr := time.ParseDuration(server.Config.GetString("interval"))
-	if intervalErr != nil {
-		glog.Warningf("Unable to parse interval %s", interval, intervalErr.Error())
-		return intervalErr
+func (server *Server) runCaptureLoop(interval time.Duration, capturers *capturer.Capturers) {
+	for server.runLoop {
+		timer := time.NewTimer(interval)
+		glog.Infof("Waiting for %s before moving to next capture", interval)
+		err := capturers.Run()
+		if err != nil {
+			glog.Warningf("Error when running capturers: %s", err.Error())
+		}
+		<-timer.C
+	}
+}
+
+// startCapture starts the capture loop if not already started
+func (server *Server) startCapture() error {
+	server.mutex.Lock()
+	defer server.mutex.Unlock()
+	if server.runLoop {
+		return fmt.Errorf("Ingestor already started")
 	}
 
-	capturers, capturerErr := capturer.NewCapturers(server.Config)
-	if capturerErr != nil {
-		glog.Warningf("Unable to create capturers", capturerErr.Error())
-		return capturerErr
+	interval, err := time.ParseDuration(server.Config.GetString("interval"))
+	if err != nil {
+		return fmt.Errorf("Unable to parse interval %s", interval, err.Error())
 	}
 
-	server.CaptureFlag = true
-	server.capture(interval, capturers)
+	capturers, err := capturer.NewCapturers(server.Config)
+	if err != nil {
+		return fmt.Errorf("Unable to create capturers", err.Error())
+	}
+
+	server.runLoop = true
+	go server.runCaptureLoop(interval, capturers)
+
 	return nil
 }
 
@@ -67,52 +84,34 @@ func (server *Server) StartServer() error {
 }
 
 func (server *Server) startIngestor(c *gin.Context) {
-	if server.CaptureFlag {
-		return
-	}
-
-	server.mutex.Lock()
-	defer server.mutex.Unlock()
-
-	interval, intervalErr := time.ParseDuration(server.Config.GetString("interval"))
-	if intervalErr != nil {
+	if err := server.startCapture(); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": true,
-			"data":  fmt.Sprintf("Unable to parse interval %s", interval, intervalErr.Error()),
+			"data":  "Unable to start ingestor: " + err.Error(),
 		})
 		return
 	}
 
-	capturers, capturerErr := capturer.NewCapturers(server.Config)
-	if capturerErr != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": true,
-			"data":  "Unable to create capturers: " + capturerErr.Error(),
-		})
-		return
-	}
-
-	// TODO: Only start if it hasn't been started!!!
-	server.CaptureFlag = true
-	server.capture(interval, capturers)
 	c.JSON(http.StatusAccepted, gin.H{
 		"error": false,
 	})
 }
 
 func (server *Server) stopIngestor(c *gin.Context) {
-	server.CaptureFlag = false
-}
+	server.mutex.Lock()
+	defer server.mutex.Unlock()
 
-func (server *Server) capture(interval time.Duration, capturers *capturer.Capturers) {
-	if server.CaptureFlag {
-		timer := time.NewTimer(interval)
-		glog.Infof("Waiting for %s before moving to next capture", interval)
-		err := capturers.Run()
-		if err != nil {
-			glog.Warningf("Error when running capturers: %s", err.Error())
-		}
-		<-timer.C
-		server.capture(interval, capturers)
+	if !server.runLoop {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": true,
+			"data":  "Ingestor already stopped",
+		})
+		return
 	}
+
+	server.runLoop = false
+
+	c.JSON(http.StatusAccepted, gin.H{
+		"error": false,
+	})
 }
