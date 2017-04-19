@@ -14,7 +14,7 @@ import (
 type DB interface {
 	Insert(deployments Deployments) error
 	Upsert(selector map[string]interface{}, deployments Deployments) error
-	InsertK8s(deployments KubernetesDeployments) error
+	InsertK8s(deployments K8sDeployments) error
 }
 
 type MongoDB struct {
@@ -94,7 +94,7 @@ func (db MongoDB) Upsert(selector map[string]interface{}, deployments Deployment
 	return nil
 }
 
-func (db MongoDB) InsertK8s(deployments KubernetesDeployments) error {
+func (db MongoDB) InsertK8s(deployments K8sDeployments) error {
 	session, sessionErr := db.connect()
 	if sessionErr != nil {
 		return errors.New("Unable to connect mongo: " + sessionErr.Error())
