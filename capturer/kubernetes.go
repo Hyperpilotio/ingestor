@@ -1,9 +1,7 @@
 package capturer
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
 
 	"gopkg.in/mgo.v2/bson"
 
@@ -13,9 +11,9 @@ import (
 )
 
 type KubernetesContainer struct {
-	CantainerName  string `json:"CantainerName" bson:"CantainerName"`
-	ContainerImage string `json:"ContainerImage" bson:"ContainerImage"`
-	// Limit          ResourceList `json:"Limit" bson:"Limit"`
+	CantainerName  string            `json:"CantainerName" bson:"CantainerName"`
+	ContainerImage string            `json:"ContainerImage" bson:"ContainerImage"`
+	Limit          map[string]string `json:"Limit" bson:"Limit"`
 }
 
 type KubernetesPod struct {
@@ -27,32 +25,44 @@ type KubernetesPod struct {
 }
 
 type KubernetesNode struct {
-	IsMaster bool            `json:"IsMaster" bson:"IsMaster"`
-	NodeName string          `json:"NodeName" bson:"NodeName"`
-	Pods     []KubernetesPod `json:"Pods" bson:"Pods"`
-	// Conditions []NodeCondition `json:"Conditions" bson:"Conditions"`
+	IsMaster   bool               `json:"IsMaster" bson:"IsMaster"`
+	NodeName   string             `json:"NodeName" bson:"NodeName"`
+	Pods       []KubernetesPod    `json:"Pods" bson:"Pods"`
+	Conditions []v1.NodeCondition `json:"Conditions" bson:"Conditions"`
 }
 
 type KubernetesService struct {
-	ServiceName string   `json:"ServiceName" bson:"ServiceName"`
-	ClusterIP   string   `json:"ClusterIP" bson:"ClusterIP"`
-	ExternalIPs []string `json:"ExternalIPs" bson:"ExternalIPs"`
-	// Ports       []ServicePort `json:"Ports" bson:"Ports"`
+	ServiceName string           `json:"ServiceName" bson:"ServiceName"`
+	ClusterIP   string           `json:"ClusterIP" bson:"ClusterIP"`
+	ExternalIPs []string         `json:"ExternalIPs" bson:"ExternalIPs"`
+	Ports       []v1.ServicePort `json:"Ports" bson:"Ports"`
+}
+
+type KubernetesDeployment struct {
+	Name         string            `json:"Name" bson:"Name"`
+	Namespace    string            `json:"Namespace" bson:"Namespace"`
+	SelfLink     string            `json:"SelfLink" bson:"SelfLink"`
+	Replicas     int32             `json:"Replicas" bson:"Replicas"`
+	Labels       map[string]string `json:"Labels" bson:"Labels"`
+	Selector     map[string]string `json:"Selector" bson:"Selector"`
+	NodeSelector map[string]string `json:"NodeSelector" bson:"NodeSelector"`
 }
 
 type KubernetesCluster struct {
-	ClusterName string              `json:"ClusterName" bson:"ClusterName"`
-	Nodes       []KubernetesNode    `json:"KubernetesNode" bson:"KubernetesNode"`
-	Services    []KubernetesService `json:"KubernetesService" bson:"KubernetesService"`
+	ClusterName string                 `json:"ClusterName" bson:"ClusterName"`
+	ID          bson.ObjectId          `json:"id" bson:"_id,omitempty"`
+	Nodes       []KubernetesNode       `json:"Nodes" bson:"Nodes"`
+	Services    []KubernetesService    `json:"Services" bson:"Services"`
+	Deployments []KubernetesDeployment `json:"Deployments" bson:"Deployments"`
 }
 
-type KubernetesDeployments struct {
+type K8sDeployments struct {
 	ID       bson.ObjectId       `json:"id" bson:"_id,omitempty"`
 	Clusters []KubernetesCluster `json:"Clusters" bson:"Clusters"`
 }
 
-func GetK8SCluster(kubeconfigPath string) (*KubernetesDeployments, error) {
-	// kubeconfig := flag.String("kubeconfig", filepath.Join(os.Getenv("k8sConfigDir"), "kubeconfig"), "absolute path to the kubeconfig file")
+func GetK8SCluster(kubeconfigPath string) (*K8sDeployments, error) {
+	// kubeconfig := flag.String("kubeconfig", "/tmp/analysis-ui-********_kubeconfig/kubeconfig", "absolute path to the kubeconfig file")
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
 	if err != nil {
 		return nil, errors.New("Unable to build config: " + err.Error())
@@ -60,6 +70,10 @@ func GetK8SCluster(kubeconfigPath string) (*KubernetesDeployments, error) {
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return nil, errors.New("Unable to create a new Clientset: " + err.Error())
+	}
+	deployments, err := clientset.ExtensionsV1beta1().Deployments("").List(v1.ListOptions{})
+	if err != nil {
+		return nil, errors.New("Unable to find deployments: " + err.Error())
 	}
 	nodes, err := clientset.CoreV1().Nodes().List(v1.ListOptions{})
 	if err != nil {
@@ -71,23 +85,36 @@ func GetK8SCluster(kubeconfigPath string) (*KubernetesDeployments, error) {
 	}
 
 	k8sCluster := &KubernetesCluster{}
-	clusterNodes := []KubernetesNode{}
-	deploymentPods := []KubernetesPod{}
+	clusterDeployments := []KubernetesDeployment{}
+	for _, deployment := range deployments.Items {
+		clusterDeployment := &KubernetesDeployment{}
+		clusterDeployment.Name = deployment.Name
+		clusterDeployment.Namespace = deployment.Namespace
+		clusterDeployment.SelfLink = deployment.SelfLink
+		clusterDeployment.Labels = deployment.Labels
+		clusterDeployment.Replicas = *deployment.Spec.Replicas
+		clusterDeployment.Selector = deployment.Spec.Selector.MatchLabels
+		clusterDeployment.NodeSelector = deployment.Spec.Template.Spec.NodeSelector
+		clusterDeployments = append(clusterDeployments, *clusterDeployment)
+	}
+	k8sCluster.Deployments = clusterDeployments
 
+	clusterNodes := []KubernetesNode{}
 	for _, node := range nodes.Items {
 		clusterNode := &KubernetesNode{}
-		if node.ObjectMeta.Labels["kubeadm.alpha.kubernetes.io/role"] == "master" {
+		if node.Labels["kubeadm.alpha.kubernetes.io/role"] == "master" {
 			clusterNode.IsMaster = true
 		}
-		clusterNode.NodeName = node.ObjectMeta.Name
-		// clusterNode.Conditions = node.Status.Conditions
+		clusterNode.NodeName = node.Name
+		clusterNode.Conditions = node.Status.Conditions
 
+		deploymentPods := []KubernetesPod{}
 		for _, pod := range pods.Items {
-			if pod.Spec.NodeName == node.ObjectMeta.Name {
+			if pod.Spec.NodeName == node.Name {
 				deploymentPod := &KubernetesPod{}
-				deploymentPod.PodName = pod.ObjectMeta.Name
+				deploymentPod.PodName = pod.Name
 				deploymentPod.NodeName = pod.Spec.NodeName
-				deploymentPod.ClusterName = pod.ObjectMeta.ClusterName
+				deploymentPod.ClusterName = pod.ClusterName
 				deploymentPod.Phase = string(pod.Status.Phase)
 
 				deploymentContainers := []KubernetesContainer{}
@@ -95,43 +122,43 @@ func GetK8SCluster(kubeconfigPath string) (*KubernetesDeployments, error) {
 					deploymentContainer := &KubernetesContainer{}
 					deploymentContainer.CantainerName = container.Name
 					deploymentContainer.ContainerImage = container.Image
-					// deploymentContainer.Limit = container.Resources.Limits
+					deploymentContainer.Limit = make(map[string]string)
+					for k, v := range container.Resources.Limits {
+						limitJson, error := v.MarshalJSON()
+						if error == nil {
+							deploymentContainer.Limit[string(k)] = string(limitJson)
+						}
+					}
 					deploymentContainers = append(deploymentContainers, *deploymentContainer)
 				}
 				deploymentPod.Containers = deploymentContainers
-				jPod, _ := json.Marshal(&deploymentPod)
-				fmt.Println(string(jPod))
 				deploymentPods = append(deploymentPods, *deploymentPod)
+				clusterNode.Pods = deploymentPods
 			}
 		}
-		clusterNode.Pods = deploymentPods
-		jNode, _ := json.Marshal(&clusterNode)
-		fmt.Println(string(jNode))
 		clusterNodes = append(clusterNodes, *clusterNode)
 	}
 	k8sCluster.Nodes = clusterNodes
 
-	services, err := clientset.CoreV1().Services("").List(v1.ListOptions{})
-	if err != nil {
-		return nil, errors.New("Unable to find any service: " + err.Error())
-	}
-
-	clusterServices := []KubernetesService{}
-	for _, service := range services.Items {
-		clusterService := &KubernetesService{}
-		clusterService.ServiceName = service.ObjectMeta.Name
-		clusterService.ClusterIP = service.Spec.ClusterIP
-		// clusterService.Ports = service.Spec.Ports
-		clusterService.ExternalIPs = service.Spec.ExternalIPs
-		jService, _ := json.Marshal(&clusterService)
-		fmt.Println(string(jService))
-		clusterServices = append(clusterServices, *clusterService)
-	}
-	k8sCluster.Services = clusterServices
+	// services, err := clientset.CoreV1().Services("").List(v1.ListOptions{})
+	// if err != nil {
+	// 	return nil, errors.New("Unable to find any service: " + err.Error())
+	// }
+	//
+	// clusterServices := []KubernetesService{}
+	// for _, service := range services.Items {
+	// 	clusterService := &KubernetesService{}
+	// 	clusterService.ServiceName = service.Name
+	// 	clusterService.ClusterIP = service.Spec.ClusterIP
+	// 	clusterService.ExternalIPs = service.Spec.ExternalIPs
+	// 	clusterService.Ports = service.Spec.Ports
+	// 	clusterServices = append(clusterServices, *clusterService)
+	// }
+	// k8sCluster.Services = clusterServices
 
 	clusters := []KubernetesCluster{}
 	clusters = append(clusters, *k8sCluster)
-	k8sDeployments := &KubernetesDeployments{}
+	k8sDeployments := &K8sDeployments{}
 	k8sDeployments.Clusters = clusters
 
 	return k8sDeployments, nil
