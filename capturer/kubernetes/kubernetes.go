@@ -161,5 +161,7 @@ func (capturer *KubernetesCapturer) Capture() error {
 	k8sDeployments := &K8sDeployments{}
 	k8sDeployments.Clusters = clusters
 
+	// TODO: Write to database
+
 	return nil
 }
