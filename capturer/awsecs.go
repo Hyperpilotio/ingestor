@@ -2,6 +2,7 @@ package capturer
 
 import (
 	"errors"
+	"os"
 	"time"
 
 	"github.com/golang/glog"
@@ -71,8 +72,8 @@ var AWSRegions = []string{
 }
 
 func createSessionByRegion(viper *viper.Viper, regionName string) (*session.Session, error) {
-	awsId := viper.GetString("awsId")
-	awsSecret := viper.GetString("awsSecret")
+	awsId := os.Getenv("awsId")
+	awsSecret := os.Getenv("awsSecret")
 	creds := credentials.NewStaticCredentials(awsId, awsSecret, "")
 	config := &aws.Config{
 		Region: aws.String(regionName),
