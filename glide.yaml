@@ -17,3 +17,5 @@ import:
 - package: k8s.io/apimachinery
 - package: github.com/gin-gonic/gin
   version: ^1.2.0
+- package: github.com/rifflock/lfshook
+  version: ^1.7.0

@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/hyperpilotio/ingestor/capturer"
+	"github.com/hyperpilotio/ingestor/log"
 
 	"github.com/gin-gonic/gin"
-	"github.com/golang/glog"
 	"github.com/spf13/viper"
 )
 
@@ -32,10 +32,10 @@ func NewServer(config *viper.Viper) *Server {
 func (server *Server) runCaptureLoop(interval time.Duration, capturers *capturer.Capturers) {
 	for server.runLoop {
 		timer := time.NewTimer(interval)
-		glog.Infof("Waiting for %s before moving to next capture", interval)
+		log.Infof("Waiting for %s before moving to next capture", interval)
 		err := capturers.Run()
 		if err != nil {
-			glog.Warningf("Error when running capturers: %s", err.Error())
+			log.Warningf("Error when running capturers: %s", err.Error())
 		}
 		<-timer.C
 	}
@@ -51,12 +51,12 @@ func (server *Server) startCapture() error {
 
 	interval, err := time.ParseDuration(server.Config.GetString("interval"))
 	if err != nil {
-		return fmt.Errorf("Unable to parse interval %s", interval, err.Error())
+		return fmt.Errorf("Unable to parse interval %s", err.Error())
 	}
 
 	capturers, err := capturer.NewCapturers(server.Config)
 	if err != nil {
-		return fmt.Errorf("Unable to create capturers", err.Error())
+		return fmt.Errorf("Unable to create capturers %s", err.Error())
 	}
 
 	server.runLoop = true

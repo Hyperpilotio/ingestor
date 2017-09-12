@@ -58,3 +58,5 @@ clean:
 test:
 	go test $(glide nv)
 
+dev-test: build
+	./bin/ingestor --config ./documents/dev.config

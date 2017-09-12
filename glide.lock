@@ -1,5 +1,5 @@
-hash: 4c273e9ebf8dbad5233aa6859a852670bbe84bcc2ec4e6a83a6631db566bb24e
-updated: 2017-09-10T03:59:56.491635354+08:00
+hash: 295d2a8f69b086b5e777539194bd94e186d2c18f7289438fdc938c9bc3291930
+updated: 2017-09-12T10:42:02.799511558+08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -143,6 +143,10 @@ imports:
   version: 8a290539e2e8629dbc4e6bad948158f790ec31f4
 - name: github.com/PuerkitoBio/urlesc
   version: 5bd2802263f21d8788851d5305584c82a5c75d7e
+- name: github.com/rifflock/lfshook
+  version: 6844c808343cb8fa357d7f141b1b990e05d24e41
+- name: github.com/sirupsen/logrus
+  version: 89742aefa4b206dcf400792f3bd35b542998eb3b
 - name: github.com/Sirupsen/logrus
   version: f006c2ac4710855cf0f916dd6b77acf6b048dc6e
 - name: github.com/spf13/afero
