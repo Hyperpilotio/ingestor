@@ -15,14 +15,10 @@ type LoggerEntry = logrus.Entry
 var defaultLogger *Logger
 
 func init() {
-	defaultLogger = newLogrusLogger(*config.Config())
+	defaultLogger = NewLogger(*config.Config())
 }
 
 func NewLogger(cfg config.Provider) *Logger {
-	return newLogrusLogger(cfg)
-}
-
-func newLogrusLogger(cfg config.Provider) *logrus.Logger {
 	l := logrus.New()
 
 	if cfg.GetBool("JSONLog") {
