@@ -23,7 +23,6 @@ func NewLogger(cfg config.Provider) *Logger {
 }
 
 func newLogrusLogger(cfg config.Provider) *logrus.Logger {
-
 	l := logrus.New()
 
 	if cfg.GetBool("JSONLog") {

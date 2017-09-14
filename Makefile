@@ -2,7 +2,6 @@
 
 BIN_NAME=ingestor
 
-VERSION := $(shell grep "const Version " version.go | sed -E 's/.*"(.+)"$$/\1/')
 GIT_COMMIT=$(shell git rev-parse HEAD)
 GIT_DIRTY=$(shell test -n "`git status --porcelain`" && echo "+CHANGES" || true)
 IMAGE_NAME := "hyperpilot/ingestor"
@@ -24,7 +23,7 @@ help:
 	@echo
 
 build:
-	@echo "building ${BIN_NAME} ${VERSION}"
+	@echo "building ${BIN_NAME}"
 	@echo "GOPATH=${GOPATH}"
 	go build -ldflags "-X main.GitCommit=${GIT_COMMIT}${GIT_DIRTY} -X main.VersionPrerelease=DEV" -o bin/${BIN_NAME}
 
@@ -32,24 +31,22 @@ get-deps:
 	glide install
 
 build-alpine:
-	@echo "building ${BIN_NAME} ${VERSION}"
+	@echo "building ${BIN_NAME}"
 	@echo "GOPATH=${GOPATH}"
 	go build -ldflags '-w -linkmode external -extldflags "-static" -X main.GitCommit=${GIT_COMMIT}${GIT_DIRTY} -X main.VersionPrerelease=VersionPrerelease=RC' -o bin/${BIN_NAME}
 
 package:
-	@echo "building image ${BIN_NAME} ${VERSION} $(GIT_COMMIT)"
-	docker build --build-arg VERSION=${VERSION} --build-arg GIT_COMMIT=$(GIT_COMMIT) -t $(IMAGE_NAME):local .
+	@echo "building image ${BIN_NAME} $(GIT_COMMIT)"
+	docker build --build-arg GIT_COMMIT=$(GIT_COMMIT) -t $(IMAGE_NAME):local .
 
 tag: 
-	@echo "Tagging: latest ${VERSION} $(GIT_COMMIT)"
+	@echo "Tagging: latest $(GIT_COMMIT)"
 	docker tag $(IMAGE_NAME):local $(IMAGE_NAME):$(GIT_COMMIT)
-	docker tag $(IMAGE_NAME):local $(IMAGE_NAME):${VERSION}
 	docker tag $(IMAGE_NAME):local $(IMAGE_NAME):latest
 
 push: tag
-	@echo "Pushing docker image to registry: latest ${VERSION} $(GIT_COMMIT)"
+	@echo "Pushing docker image to registry: latest $(GIT_COMMIT)"
 	docker push $(IMAGE_NAME):$(GIT_COMMIT)
-	docker push $(IMAGE_NAME):${VERSION}
 	docker push $(IMAGE_NAME):latest
 
 clean:
