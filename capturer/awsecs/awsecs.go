@@ -5,11 +5,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/golang/glog"
 	"github.com/spf13/viper"
 	"gopkg.in/mgo.v2/bson"
 
 	"github.com/hyperpilotio/ingestor/database"
+	"github.com/hyperpilotio/ingestor/log"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -71,7 +71,7 @@ func createSessionByRegion(viper *viper.Viper, regionName string) (*session.Sess
 	config = config.WithCredentials(creds)
 	sess, err := session.NewSession(config)
 	if err != nil {
-		glog.Errorf("Unable to create session: %s", err)
+		log.Errorf("Unable to create session: %s", err)
 		return nil, err
 	}
 
@@ -114,7 +114,7 @@ func (capturer AWSECSCapturer) Capture() error {
 }
 
 func (capturer AWSECSCapturer) GetClusters() (*Deployments, error) {
-	glog.V(1).Infof("GetClusters for region: %s", capturer.Region)
+	log.Infof("GetClusters for region: %s", capturer.Region)
 
 	ecsSvc := ecs.New(capturer.Sess)
 	ec2Svc := ec2.New(capturer.Sess)

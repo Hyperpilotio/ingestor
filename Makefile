@@ -1,24 +1,59 @@
-GLIDE=$(which glide)
-GO_EXECUTABLE ?= go
-# For windows developer, use $(go list ./... | grep -v /vendor/)
-PACKAGES=$(glide novendor)
+.PHONY: build build-alpine clean test help default
 
-glide-check:
-	@if [ "X$(GLIDE)" = "X"]; then \
-		echo "glide doesn't exist."; \
-		curl https://glide.sh/get | sh ; \
-	else \
-		echo "glide installed"; \
-	fi
+BIN_NAME=ingestor
 
-init: glide-check
-	glide install
+GIT_COMMIT=$(shell git rev-parse HEAD)
+GIT_DIRTY=$(shell test -n "`git status --porcelain`" && echo "+CHANGES" || true)
+IMAGE_NAME := "hyperpilot/ingestor"
 
-test:
-	${GO_EXECUTABLE} test ${PACKAGES}
+default: test
+
+help:
+	@echo 'Management commands for ingestor:'
+	@echo
+	@echo 'Usage:'
+	@echo '    make build           Compile the project.'
+	@echo '    make get-deps        runs glide install, mostly used for ci.'
+	@echo '    make build-alpine    Compile optimized for alpine linux.'
+	@echo '    make package         Build final docker image with just the go binary inside'
+	@echo '    make tag             Tag image created by package with latest, git commit and version'
+	@echo '    make test            Run tests on a compiled project.'
+	@echo '    make push            Push tagged images to registry'
+	@echo '    make clean           Clean the directory tree.'
+	@echo
 
 build:
-	${GO_EXECUTABLE} build .
+	@echo "building ${BIN_NAME}"
+	@echo "GOPATH=${GOPATH}"
+	go build -ldflags "-X main.GitCommit=${GIT_COMMIT}${GIT_DIRTY} -X main.VersionPrerelease=DEV" -o bin/${BIN_NAME}
+
+get-deps:
+	glide install
+
+build-alpine:
+	@echo "building ${BIN_NAME}"
+	@echo "GOPATH=${GOPATH}"
+	go build -ldflags '-w -linkmode external -extldflags "-static" -X main.GitCommit=${GIT_COMMIT}${GIT_DIRTY} -X main.VersionPrerelease=VersionPrerelease=RC' -o bin/${BIN_NAME}
+
+package:
+	@echo "building image ${BIN_NAME} $(GIT_COMMIT)"
+	docker build --build-arg GIT_COMMIT=$(GIT_COMMIT) -t $(IMAGE_NAME):local .
+
+tag: 
+	@echo "Tagging: latest $(GIT_COMMIT)"
+	docker tag $(IMAGE_NAME):local $(IMAGE_NAME):$(GIT_COMMIT)
+	docker tag $(IMAGE_NAME):local $(IMAGE_NAME):latest
+
+push: tag
+	@echo "Pushing docker image to registry: latest $(GIT_COMMIT)"
+	docker push $(IMAGE_NAME):$(GIT_COMMIT)
+	docker push $(IMAGE_NAME):latest
+
+clean:
+	@test ! -e bin/${BIN_NAME} || rm bin/${BIN_NAME}
+
+test:
+	go test $(glide nv)
 
 dev-test: build
-	./ingestor --config ./documents/dev.config -logtostderr=true -v=2
+	./bin/ingestor --config ./documents/dev.config
